@@ -72,6 +72,17 @@ and roughly on par with the seasonal-naive baseline — see
 methodology, and stated assumptions (illustrative unit costs, since the
 source dataset has no price data).
 
+## Dashboard
+
+![Summary dashboard](reports/figures/dashboard_summary.png)
+
+The chart data behind this is exported as tidy CSVs in
+`reports/tableau_export/` — `daily_actual_vs_forecast.csv`,
+`model_comparison_summary.csv`, and `family_level_summary.csv` — built to
+be dropped straight into Tableau or Power BI: connect to the folder,
+build a line chart of actual vs. predicted filtered by model/family, and
+KPI cards from the summary tables.
+
 ## Project structure
 
 ```
@@ -88,6 +99,13 @@ tests/          unit tests for src/
 python -m venv venv
 source venv/bin/activate   # venv\Scripts\activate on Windows
 pip install -r requirements.txt
+```
+
+Then either run the notebooks in order (`01` → `02` → `03`), or run the
+tests:
+
+```
+pytest tests/
 ```
 
 ## Author
