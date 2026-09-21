@@ -44,15 +44,26 @@ See `data/README.md` for how to download it.
 
 ## Results
 
-_To be filled in as the project progresses._
+4-fold rolling-origin backtest, 28-day forecast horizon, averaged across
+the 8 scoped product families (see `notebooks/02_forecasting_models.ipynb`
+for the full breakdown by fold and family):
 
 | Model | MAPE | WMAPE | Bias |
 |---|---|---|---|
-| Naive baseline | — | — | — |
-| SARIMA / Prophet | — | — | — |
-| XGBoost / LightGBM | — | — | — |
+| Seasonal-naive baseline | 10.5% | 11.1% | -1.1% |
+| Prophet | 11.8% | 11.9% | -0.5% |
+| XGBoost (recursive, global) | 17.8% | 17.6% | +10.5% |
 
-Estimated inventory cost impact vs. baseline: _TBD_
+The seasonal-naive baseline held up best on average — weekly retail
+seasonality here is strong and stable enough that "same day last week"
+is a hard baseline to beat. XGBoost was competitive on steadier
+categories (BEVERAGES, CLEANING) but degraded on volatile, perishable
+ones (MEATS, POULTRY): forecasting recursively over a 28-day horizon lets
+errors compound, fastest on the noisiest series. That diagnosis, not a
+tuned-away number, is the point — see the notebook for the full
+discussion and the documented next step (a direct multi-step model).
+
+Estimated inventory cost impact vs. baseline: _TBD — Phase 3_
 
 ## Project structure
 
