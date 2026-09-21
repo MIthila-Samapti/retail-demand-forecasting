@@ -4,9 +4,9 @@ Predicting product-level retail demand and translating those forecasts into
 inventory decisions (safety stock, reorder points, service levels) using the
 Corporación Favorita grocery sales dataset.
 
-This project is a working proof-of-concept for the demand forecasting and
-inventory optimization components of my AI-Powered Predictive Supply Chain
-Resilience Framework — see [Methodology](#methodology) below.
+This is a working proof-of-concept for the demand forecasting and
+inventory optimization pieces of my broader AI-Powered Predictive Supply
+Chain Resilience Framework — see [Methodology](#methodology) below.
 
 ## Problem
 
