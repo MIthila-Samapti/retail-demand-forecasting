@@ -63,7 +63,14 @@ errors compound, fastest on the noisiest series. That diagnosis, not a
 tuned-away number, is the point — see the notebook for the full
 discussion and the documented next step (a direct multi-step model).
 
-Estimated inventory cost impact vs. baseline: _TBD — Phase 3_
+Estimated inventory cost impact: simulating a forecast-driven reorder
+policy (95% target service level, 7-day lead time) against actual demand
+across the same backtest windows, Prophet's forecast produced the
+lowest total simulated inventory cost, about **17% lower than XGBoost's**
+and roughly on par with the seasonal-naive baseline — see
+`notebooks/03_inventory_optimization.ipynb` for the full breakdown,
+methodology, and stated assumptions (illustrative unit costs, since the
+source dataset has no price data).
 
 ## Project structure
 

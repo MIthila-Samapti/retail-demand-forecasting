@@ -212,14 +212,16 @@ def evaluate(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
 # Rolling-origin backtest orchestration
 # ---------------------------------------------------------------------------
 
-def run_backtest(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd.DataFrame:
+def generate_backtest_predictions(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd.DataFrame:
     """
     Walk-forward backtest: n_folds non-overlapping `horizon`-day test
     windows at the end of the series, each with an expanding training
     window (everything before that window). For each fold, each family,
-    and each model, forecast the window and score it.
+    and each model, forecast the window day by day.
 
-    Returns one row per (fold, family, model) with MAPE/WMAPE/bias.
+    Returns one row per (fold, family, model, date) with the actual and
+    predicted value -- the day-level detail that both the accuracy
+    metrics and the inventory simulation (Phase 3) are built from.
     """
     max_date = panel["date"].max()
     families = sorted(panel["family"].unique())
@@ -237,10 +239,11 @@ def run_backtest(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd
             hist = train_all[train_all["family"] == family]
             actual_df = panel[
                 (panel["family"] == family) & (panel["date"] > cutoff) & (panel["date"] <= window_end)
-            ]
-            y_true = actual_df["unit_sales"].values
-            if len(y_true) < horizon:
+            ].sort_values("date")
+            if len(actual_df) < horizon:
                 continue
+            y_true = actual_df["unit_sales"].values
+            dates = actual_df["date"].values
 
             base_pred = seasonal_naive_forecast(hist.set_index("date")["unit_sales"], horizon)
             train_p = hist.rename(columns={"date": "ds", "unit_sales": "y"})
@@ -253,7 +256,23 @@ def run_backtest(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd
                 ("Prophet", proph_pred),
                 ("XGBoost", xgb_pred),
             ]:
-                metrics = evaluate(y_true, y_pred)
-                rows.append({"fold": fold, "family": family, "model": model_name, **metrics})
+                for day_offset, (d, actual, pred) in enumerate(zip(dates, y_true, y_pred), start=1):
+                    rows.append({
+                        "fold": fold, "family": family, "model": model_name,
+                        "date": d, "day_offset": day_offset,
+                        "actual": actual, "predicted": pred,
+                    })
 
+    return pd.DataFrame(rows)
+
+
+def run_backtest(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd.DataFrame:
+    """Aggregate MAPE/WMAPE/bias per (fold, family, model), built on top
+    of generate_backtest_predictions so metrics and simulation always
+    agree with each other."""
+    detailed = generate_backtest_predictions(panel, horizon, n_folds)
+    rows = []
+    for (fold, family, model), g in detailed.groupby(["fold", "family", "model"]):
+        metrics = evaluate(g["actual"].values, g["predicted"].values)
+        rows.append({"fold": fold, "family": family, "model": model, **metrics})
     return pd.DataFrame(rows)
