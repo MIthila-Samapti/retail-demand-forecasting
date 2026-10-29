@@ -3,12 +3,11 @@ Inventory optimization: turns a demand forecast (and its error) into a
 safety stock and reorder point, then simulates a simple replenishment
 policy to quantify stockouts and excess inventory against actual demand.
 
-Note on costs: the Favorita dataset has no price/cost data, so holding
-and stockout costs below use illustrative per-unit dollar figures rather
-than real ones. That's stated explicitly wherever a dollar figure
-appears -- the point is to demonstrate the method (forecast -> safety
-stock -> reorder point -> simulated cost), which is the same method
-you'd apply once real unit costs are plugged in.
+Note on costs: Favorita has no price/cost data, so holding and
+stockout costs below use illustrative per-unit dollar figures, not
+real ones - flagged wherever a dollar figure shows up. Point is to
+demonstrate the method (forecast -> safety stock -> reorder point ->
+simulated cost); same method applies once real unit costs go in.
 """
 from __future__ import annotations
 
@@ -25,12 +24,9 @@ SERVICE_LEVEL = 0.95
 
 
 def compute_daily_error_std(detailed: pd.DataFrame) -> pd.DataFrame:
-    """
-    Std deviation of (actual - predicted) per family+model, computed
-    across all backtest days. This is the model's real, out-of-sample
-    forecast error -- not a training-set residual -- so it reflects how
-    uncertain the forecast actually is in production.
-    """
+    # std of (actual - predicted) per family+model across all backtest
+    # days - real out-of-sample error, not a training residual, so it
+    # reflects actual production uncertainty
     g = detailed.copy()
     g["error"] = g["actual"] - g["predicted"]
     return (
@@ -42,20 +38,17 @@ def compute_daily_error_std(detailed: pd.DataFrame) -> pd.DataFrame:
 
 
 def safety_stock(sigma_daily: float, lead_time: int = LEAD_TIME_DAYS, service_level: float = SERVICE_LEVEL) -> float:
-    """
-    Classic newsvendor-style safety stock: z * sigma_L, where sigma_L is
-    the standard deviation of demand *over the lead time*. Assuming
-    day-to-day forecast errors are roughly independent, sigma_L scales
-    with sqrt(lead_time) -- a standard, if simplifying, textbook
-    assumption (real demand errors are often autocorrelated, which would
-    push the true number higher; noted as a limitation, not hidden).
-    """
+    # classic newsvendor safety stock: z * sigma_L, sigma_L scaled by
+    # sqrt(lead_time) assuming independent day-to-day errors. standard
+    # textbook simplification - real demand errors are often
+    # autocorrelated, which would push the true number higher. limitation,
+    # not hidden.
     z = norm.ppf(service_level)
     return max(0.0, z * sigma_daily * np.sqrt(lead_time))
 
 
 def reorder_point(avg_daily_forecast: float, ss: float, lead_time: int = LEAD_TIME_DAYS) -> float:
-    """Expected demand during the lead time, plus the safety buffer."""
+    # expected demand over the lead time, plus the safety buffer
     return avg_daily_forecast * lead_time + ss
 
 
@@ -66,17 +59,12 @@ def simulate_policy(
     lead_time: int = LEAD_TIME_DAYS,
     service_level: float = SERVICE_LEVEL,
 ) -> dict:
-    """
-    Simulates a daily-review, order-up-to-reorder-point policy over one
-    family's backtest window, using that model's own forecasts to set
-    the reorder point, then testing it against what actually happened.
-
-    Policy: each day, receive any order placed `lead_time` days ago,
-    fill actual demand from on-hand stock (recording any shortfall as a
-    stockout), then if inventory position (on-hand + on-order) has
-    fallen to or below the reorder point, order enough to bring it back
-    up to the reorder point.
-    """
+    # daily-review, order-up-to-reorder-point policy over one family's
+    # backtest window: each day, receive any order placed lead_time
+    # days ago, fill demand from on-hand (shortfall = stockout), then if
+    # inventory position (on-hand + on-order) is at or below the reorder
+    # point, order back up to it. uses the model's own forecasts to set
+    # the reorder point, tested against what actually happened.
     sigma_daily = float(np.std(actual - forecast, ddof=1)) if len(actual) > 1 else 0.0
     ss = safety_stock(sigma_daily, lead_time, service_level)
     avg_daily_forecast = float(np.mean(forecast))
@@ -128,11 +116,8 @@ def simulate_policy(
 
 
 def run_inventory_simulation(detailed: pd.DataFrame, lead_time: int = LEAD_TIME_DAYS, service_level: float = SERVICE_LEVEL) -> pd.DataFrame:
-    """
-    Runs simulate_policy for every family+model, using that model's
-    full set of backtest-window forecasts (all folds concatenated, in
-    date order) as the demand signal driving the replenishment policy.
-    """
+    # simulate_policy for every family+model, driven by that model's
+    # full backtest-window forecasts (all folds concatenated, date order)
     rows = []
     for (family, model), g in detailed.sort_values(["family", "model", "date"]).groupby(["family", "model"]):
         result = simulate_policy(
