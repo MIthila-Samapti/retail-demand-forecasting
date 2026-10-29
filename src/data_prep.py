@@ -6,22 +6,19 @@ them) into one clean, analysis-ready table: daily unit sales per
 store x product family, with promotion, oil-price, and holiday context
 attached.
 
-Why aggregate to store x family x day, instead of every individual item?
-------------------------------------------------------------------------
-The raw data is 125M+ rows across 54 stores and 4,100 items (2013-2017).
-At the individual store-item level, most day-to-day series are sparse
-and intermittent (an item sells zero units on many days), which mostly
-tests a different modeling problem (intermittent-demand forecasting)
-than the one this project is demonstrating. Aggregating to store x
-family x day keeps the real-world heterogeneity that makes forecasting
-worthwhile -- different stores, different product categories, promotions,
-holidays, oil-price shocks -- while producing dense, well-populated daily
-series that three real forecasting approaches can be fairly compared on.
+Why store x family x day instead of individual items? The raw data is
+125M+ rows across 54 stores and 4,100 items (2013-2017). At the
+individual store-item level most series are sparse and intermittent
+(zero units on many days), which is really a different modeling
+problem (intermittent demand) than what this project is demonstrating.
+Aggregating up keeps the heterogeneity that makes forecasting
+interesting - different stores, categories, promos, holidays, oil
+shocks - while giving three forecasting approaches dense enough series
+to be fairly compared on.
 
-Scope: top 10 stores and top 8 product families by total historical
-unit sales (see notebooks/01_data_exploration.ipynb for how these were
-chosen). Together they cover a large share of total volume while
-keeping the raw-data pass fast enough to run on a laptop.
+Scope: top 10 stores and top 8 families by historical unit sales (see
+notebooks/01_data_exploration.ipynb for how these were picked) - covers
+most of the volume while keeping the raw-data pass runnable on a laptop.
 """
 from __future__ import annotations
 
@@ -35,7 +32,7 @@ TOP_FAMILIES = [
 
 
 def load_reference_tables(raw_dir: str) -> dict[str, pd.DataFrame]:
-    """Load the small reference tables (everything except train.csv)."""
+    # the small reference tables - everything except train.csv
     items = pd.read_csv(f"{raw_dir}/items.csv")[["item_nbr", "family"]]
     stores = pd.read_csv(f"{raw_dir}/stores.csv")
 
@@ -62,11 +59,9 @@ def build_daily_panel(
     families: list[str] = TOP_FAMILIES,
     chunksize: int = 3_000_000,
 ) -> pd.DataFrame:
-    """
-    Stream train.csv in chunks (it's ~5GB uncompressed, too large to load
-    at once on a typical laptop), filter to the chosen stores/families as
-    we go, and aggregate to daily unit sales per store x family.
-    """
+    # streams train.csv in chunks (~5GB uncompressed, too big to load at
+    # once on a laptop), filters to the chosen stores/families as it
+    # goes, aggregates to daily unit sales per store x family
     ref = load_reference_tables(raw_dir)
     items, store_meta, oil = ref["items"], ref["stores"], ref["oil"]
     keep_items = set(items.loc[items["family"].isin(families), "item_nbr"])
