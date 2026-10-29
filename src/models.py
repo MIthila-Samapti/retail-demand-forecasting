@@ -1,21 +1,19 @@
 """
 Forecasting models and rolling-origin backtesting.
 
-Three approaches are compared on the same target (daily unit sales per
-product family, summed across the 10 scoped stores):
+Three approaches, same target (daily unit sales per product family,
+summed across the 10 scoped stores):
 
-1. Seasonal-naive baseline  -- "demand next Tuesday = demand last Tuesday"
-2. Prophet                  -- additive time-series model with weekly/yearly
-                                seasonality plus oil-price, promotion, and
-                                holiday regressors
-3. XGBoost                  -- a single global gradient-boosted model
-                                trained jointly across all families, using
-                                lag/rolling-window features plus calendar,
-                                promotion, and oil-price signals
+1. Seasonal-naive baseline - "demand next Tuesday = demand last Tuesday"
+2. Prophet - additive time-series model, weekly/yearly seasonality plus
+   oil-price, promotion, and holiday regressors
+3. XGBoost - one global gradient-boosted model trained across all
+   families, lag/rolling-window features plus calendar, promotion, and
+   oil-price signals
 
-All three are evaluated the same way: rolling-origin (walk-forward)
-backtesting, so accuracy reflects what each model would have achieved
-forecasting forward in time, not a single lucky train/test split.
+All three get the same evaluation: rolling-origin (walk-forward)
+backtesting, so accuracy reflects what each model would've actually
+done forecasting forward, not one lucky train/test split.
 """
 from __future__ import annotations
 
@@ -35,15 +33,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # ---------------------------------------------------------------------------
 
 def make_family_panel(store_family_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Collapse the store x family x day panel down to family x day, summed
-    across the 10 scoped stores, with every calendar day present.
-
-    Important: the raw Kaggle data only includes rows where a sale
-    happened, so a missing date for a family isn't missing data -- it's
-    zero units sold that day. We reindex to the full date range and fill
-    with 0 so the models see true zero-demand days instead of gaps.
-    """
+    # collapses store x family x day down to family x day (summed
+    # across the 10 scoped stores), every calendar day present. the raw
+    # Kaggle data only has rows where a sale happened, so a missing
+    # date isn't missing data, it's zero units sold - reindex to the
+    # full range and fill 0 so models see real zero-demand days, not gaps
     df = store_family_df.copy()
     full_dates = pd.date_range(df["date"].min(), df["date"].max(), freq="D")
 
@@ -75,7 +69,7 @@ def make_family_panel(store_family_df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def seasonal_naive_forecast(history: pd.Series, horizon: int, season: int = 7) -> np.ndarray:
-    """Repeat the last `season`-day pattern forward for `horizon` days."""
+    # repeats the last `season`-day pattern forward for `horizon` days
     last_season = history.values[-season:]
     reps = int(np.ceil(horizon / season))
     return np.tile(last_season, reps)[:horizon]
@@ -86,16 +80,13 @@ def seasonal_naive_forecast(history: pd.Series, horizon: int, season: int = 7) -
 # ---------------------------------------------------------------------------
 
 def prophet_forecast(train: pd.DataFrame, future_regressors: pd.DataFrame, horizon: int) -> np.ndarray:
-    """
-    train: columns ds, y, oil_price, n_items_on_promo, is_holiday
-    future_regressors: the same regressor columns for the `horizon` days
-    being forecast (in a real deployment these would be your own
-    forecasts/plans for promotions, holidays are known in advance, and
-    oil price would need its own forecast -- here we use the realized
-    values, which is standard practice for backtesting a model's demand-
-    forecasting skill in isolation from a separate regressor-forecasting
-    problem).
-    """
+    # train: columns ds, y, oil_price, n_items_on_promo, is_holiday
+    # future_regressors: same regressor columns for the horizon being
+    # forecast. in production these would be your own promo plans /
+    # known holidays / an oil-price forecast - here we use realized
+    # values, which is normal practice for backtesting a model's
+    # demand-forecasting skill separately from the regressor-forecasting
+    # problem.
     from prophet import Prophet
 
     m = Prophet(weekly_seasonality=True, yearly_seasonality=True, daily_seasonality=False)
@@ -124,8 +115,8 @@ FEATURE_COLS = [
 
 
 def add_features(panel: pd.DataFrame) -> pd.DataFrame:
-    """Add lag/rolling/calendar features, computed separately per family
-    so no family's history leaks into another's lags."""
+    # lag/rolling/calendar features, computed per family so no family's
+    # history leaks into another's lags
     df = panel.sort_values(["family", "date"]).copy()
     g = df.groupby("family")["unit_sales"]
 
@@ -155,12 +146,10 @@ def train_xgboost(train_features: pd.DataFrame):
 
 
 def xgboost_forecast(model, panel: pd.DataFrame, family: str, cutoff_date, horizon: int) -> np.ndarray:
-    """
-    Recursive multi-step forecast: predict one day ahead, append that
-    prediction to the working history, recompute lag/rolling features,
-    predict the next day -- repeated for `horizon` days. This mirrors how
-    the model would actually be used in production.
-    """
+    # recursive multi-step forecast: predict one day, append it to
+    # working history, recompute lag/rolling features, predict the next
+    # day, repeat for `horizon` days. mirrors how this would actually
+    # run in production.
     cols = FEATURE_COLS + ["family_code"]
     hist = panel[(panel["family"] == family) & (panel["date"] <= cutoff_date)].copy()
     future_dates = pd.date_range(cutoff_date + pd.Timedelta(days=1), periods=horizon, freq="D")
@@ -213,16 +202,12 @@ def evaluate(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 
 def generate_backtest_predictions(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd.DataFrame:
-    """
-    Walk-forward backtest: n_folds non-overlapping `horizon`-day test
-    windows at the end of the series, each with an expanding training
-    window (everything before that window). For each fold, each family,
-    and each model, forecast the window day by day.
-
-    Returns one row per (fold, family, model, date) with the actual and
-    predicted value -- the day-level detail that both the accuracy
-    metrics and the inventory simulation (Phase 3) are built from.
-    """
+    # walk-forward backtest: n_folds non-overlapping horizon-day test
+    # windows at the end of the series, each with an expanding training
+    # window (everything before it). forecasts each window day by day,
+    # per fold/family/model. returns one row per (fold, family, model,
+    # date) - the day-level detail both the accuracy metrics and the
+    # Phase 3 inventory simulation are built from.
     max_date = panel["date"].max()
     families = sorted(panel["family"].unique())
     rows = []
@@ -267,9 +252,8 @@ def generate_backtest_predictions(panel: pd.DataFrame, horizon: int = 28, n_fold
 
 
 def run_backtest(panel: pd.DataFrame, horizon: int = 28, n_folds: int = 4) -> pd.DataFrame:
-    """Aggregate MAPE/WMAPE/bias per (fold, family, model), built on top
-    of generate_backtest_predictions so metrics and simulation always
-    agree with each other."""
+    # aggregates MAPE/WMAPE/bias per (fold, family, model) on top of
+    # generate_backtest_predictions, so metrics and simulation always agree
     detailed = generate_backtest_predictions(panel, horizon, n_folds)
     rows = []
     for (fold, family, model), g in detailed.groupby(["fold", "family", "model"]):
